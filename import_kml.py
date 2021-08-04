@@ -31,6 +31,7 @@ class Integration:
             self.integration_import.import_process(Integration.CSV_FILENAME)
         except Exception as e:
             self.integration_log.add(LogLevel.ERROR, str(e))
+            raise Exception(e)
         finally:
             self.delete_files()
 
