@@ -1,4 +1,4 @@
-from onevizion import LogLevel, OVImport
+from onevizion import OVImport
 from bs4 import BeautifulSoup
 from datetime import datetime
 from enum import Enum
@@ -18,24 +18,20 @@ class Integration:
         self.kml = kml_file
         self.csv = csv_file
         self.integration_import = integration_import
-        self.integration_log = integration_log
+        self.log = integration_log
 
     def start_integration(self):
-        self.integration_log.add(LogLevel.INFO, 'Starting Integration')
+        self.log.info('Starting Integration')
 
         try:
             self.kml.download_kmz_file(Integration.KMZ_FILENAME)
             self.kml.extract(Integration.KMZ_FILENAME, Integration.KML_FILENAME)
             parse_list = self.csv.parse(Integration.KML_FILENAME)
             self.csv.create(parse_list, Integration.CSV_FILENAME)
-            self.integration_import.import_process(Integration.CSV_FILENAME)
-        except Exception as e:
-            self.integration_log.add(LogLevel.ERROR, str(e))
-            raise e
         finally:
             self.delete_files()
 
-        self.integration_log.add(LogLevel.INFO, 'Integration has been completed')
+        self.log.info('Integration has been completed')
 
     def delete_files(self):
         file_list = [f for f in os.listdir() if f.endswith(('.kmz', '.kml', '.csv'))]
@@ -47,7 +43,7 @@ class KML:
 
     def __init__(self, url, integration_log):
         self.url = url
-        self.integration_log = integration_log
+        self.log = integration_log
 
     def download_kmz_file(self, kmz_filename):
         kmz_content = self.download()
@@ -57,7 +53,7 @@ class KML:
         url = self.url
         response = requests.get(url)
         if response.ok:
-            self.integration_log.add(LogLevel.INFO, 'KMZ file downloaded')
+            self.log.info('KMZ file downloaded')
             return response.content
         else:
             raise Exception(f'Failed download KMZ. Exception [{response.text}]')
@@ -85,16 +81,16 @@ class KML:
 
         if kml_filename_to_extract is None:
             raise Exception(f'Failed extract KML file. Exception [KML file not found in KMZ]')
-        else:
-            kml.extract(kml_filename_to_extract)
-            os.rename(kml_filename_to_extract, kml_filename)
-            self.integration_log.add(LogLevel.INFO, 'KML file extracted')
+
+        kml.extract(kml_filename_to_extract)
+        os.rename(kml_filename_to_extract, kml_filename)
+        self.log.info('KML file extracted')
 
 
 class CSV:
 
     def __init__(self, integration_log):
-        self.integration_log = integration_log
+        self.log = integration_log
 
     def parse(self, kml_filename):
         parse_list = []
@@ -108,8 +104,8 @@ class CSV:
         date = re.search('\d+-\w+-\d+', description_with_date.text)
         if date is None:
             raise Exception(f'Failed parse KML. Exception [Date for registration_id not found]')
-        else:
-            registration_id = f'Fires-{datetime.strptime(date.group(), "%d-%b-%Y").strftime("%m/%d/%y")}'
+
+        registration_id = f'Fires-{datetime.strptime(date.group(), "%d-%b-%Y").strftime("%m/%d/%y")}'
 
         for placemark in parse.find_all('Placemark'):
             name = placemark.find('name')
@@ -153,7 +149,7 @@ class CSV:
                                 CSVHeader.FIRE_SIZE.value:fire_size, CSVHeader.FIRE_TYPE.value:fire_type, CSVHeader.LATITUDE.value:coordinates[1], \
                                     CSVHeader.LONGITUDE.value:coordinates[0]})
 
-        self.integration_log.add(LogLevel.INFO, 'KML file parsed')
+        self.log.info('KML file parsed')
         return parse_list
 
     def create(self, parse_list, csv_filename):
@@ -165,7 +161,7 @@ class CSV:
             writer.writeheader()
             writer.writerows(parse_list)
 
-        self.integration_log.add(LogLevel.INFO, 'CSV file created')
+        self.log.info('CSV file created')
 
 
 class Import:
@@ -177,7 +173,7 @@ class Import:
         self.secret_key = secret_key
         self.import_name = import_name
         self.import_action = import_action
-        self.integration_log = integration_log
+        self.log = integration_log
 
     def import_process(self, csv_filename):
         import_id = self.get_import()
@@ -196,16 +192,19 @@ class Import:
 
             if import_id is None:
                 raise Exception(f'Import \"{self.import_name}\" not found')
-            else:
-                self.integration_log.add(LogLevel.INFO, f'Import \"{self.import_name}\" founded')
+
+            self.log.info(f'Import \"{self.import_name}\" founded')
         else:
             raise Exception(f'Failed to receive import. Exception [{str(response.text)}]')
 
         return import_id
 
     def start_import(self, import_id, file_name):
-        OVImport(self.url_onevizion_without_protocol, self.access_key, self.secret_key, import_id, file_name, self.import_action, isTokenAuth=True)
-
+        response = OVImport(self.url_onevizion_without_protocol, self.access_key, self.secret_key, import_id, file_name, self.import_action, isTokenAuth=True)
+        if response.request.ok:
+            self.log.info(f'Import \"{self.import_name}\" started')
+        else:
+            raise Exception(f'Failed to start import. Exception [{str(response.request.text)}]')
 
 class CSVHeader(Enum):
     REG_ID = 'RegistrationID'
