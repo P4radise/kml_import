@@ -1,9 +1,16 @@
-from jsonschema import validate
-from import_kml import Integration, KML, CSV, Import
-from integration_log import build_logger
-import json
-import re
+import sys
+import subprocess
 
+subprocess.check_call([sys.executable, '-m', 'pip', 'install', '-r', 'python_dependencies.txt'])
+
+try:
+    from jsonschema import validate
+    from import_kml import Integration, KML, CSV, Import
+    from onevizion import IntegrationLog, LogLevel
+    import json
+    import re
+except Exception as e:
+    raise SystemExit(f'Some required dependent libraries were installed. Module execution has to be terminated now to use installed libraries on the next scheduled launch.\n{str(e)}')
 
 with open('settings.json', 'rb') as PFile:
     settings_data = json.loads(PFile.read().decode('utf-8'))
